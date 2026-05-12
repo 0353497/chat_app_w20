@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:chat_app/services/chat_service.dart';
+import 'package:chat_app/services/chat_parser.dart';
 import 'package:flutter/material.dart';
 
 class Homepage extends StatefulWidget {
@@ -23,46 +23,29 @@ class _HomepageState extends State<Homepage> {
   void initState() {
     super.initState();
     _sub = ChatService.instance().stream.listen((data) {
-      dynamic decoded;
-      try {
-        if (data is String) {
-          decoded = jsonDecode(data);
-        } else {
-          decoded = data;
-        }
-      } catch (_) {
-        decoded = null;
-      }
+      final event = ChatParser.parse(data);
 
-      if (decoded is Map) {
-        final type = decoded['type'];
-
-        if (type == 'chat_message') {
-          final from = decoded['from']?.toString() ?? 'anonymous';
-          final text = decoded['text']?.toString() ?? '';
-          setState(() {
-            messages.add({'from': from, 'text': text});
-          });
-        } else if (type == 'user_list') {
-          final list = decoded['users'];
-          if (list is List) {
-            setState(() {
-              users.clear();
-              users.addAll(list.map((e) => e.toString()));
-            });
-          }
-        }
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-            );
-          }
+      if (event is ChatMessageEvent) {
+        setState(() {
+          messages.add({'from': event.from, 'text': event.text});
+        });
+      } else if (event is UserListEvent) {
+        setState(() {
+          users
+            ..clear()
+            ..addAll(event.users);
         });
       }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
     });
   }
 
@@ -103,7 +86,7 @@ class _HomepageState extends State<Homepage> {
                       ],
                     );
                   },
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemCount: users.length,
                 ),
               ),
