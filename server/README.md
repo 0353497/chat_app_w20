@@ -1,76 +1,99 @@
-# WebSocket Chat Server
+# WebSocket Server
 
-A Node.js WebSocket server for the Flutter chat app that handles real-time position updates.
+This Node.js WebSocket server provides two features used by the app in this repository:
 
-## Local Development
+- Real-time position feed for a demo moving box (`set_bounds` / `move_event`) used by the Flutter UI
+- Global messaging to all connected users (`register` / `chat_message`)
 
-### Prerequisites
-- Node.js 16+ installed
+The server listens on port `8080` by default.
 
-### Installation
+Quick start
 ```bash
 cd server
 npm install
-```
-
-### Run
-```bash
 npm start
 ```
 
-The server will listen on `ws://localhost:8080`
-
-### Development with auto-reload
-```bash
-npm run dev
-```
-
-## Docker Deployment
-
-### Build Docker Image
-```bash
-docker build -t chat-app-websocket .
-```
-
-### Run with Docker
-```bash
-docker run -p 8080:8080 chat-app-websocket
-```
-
-### Run with Docker Compose
+Docker
 ```bash
 docker-compose up -d
 ```
 
-### Stop and Remove
+WebSocket API
+
+1) Register a username
+
+Client → Server
+```json
+{ "type": "register", "username": "alice" }
+```
+
+Server → Client (ack)
+```json
+{ "type": "registered", "username": "alice" }
+```
+
+After registration the server broadcasts the current online user list to all clients:
+```json
+{ "type": "user_list", "users": ["alice","bob"] }
+```
+
+2) Global chat message
+
+Client → Server
+```json
+{ "type": "chat_message", "text": "Hello everyone" }
+```
+
+Server → All connected clients
+```json
+{ "type": "chat_message", "from": "alice", "text": "Hello everyone", "timestamp": 1650000000000 }
+```
+
+Server → Sender (status)
+```json
+{ "type": "message_status", "status": "delivered" }
+```
+
+3) Demo position feed (used by the Flutter demo)
+
+Client → Server
+```json
+{ "type": "set_bounds", "data": { "width": 400, "height": 800 } }
+```
+
+Server → Client (periodic)
+```json
+{ "type": "move_event", "x": 125.5, "y": 250.3 }
+```
+
+Notes & behavior
+- A single username may have multiple connected devices.
+- Chat messages are broadcast to all currently connected clients.
+- No long-term persistence or offline message queue is implemented by default.
+- The server will broadcast `user_list` on register and on disconnect.
+
+Testing with `websocat` (or any WebSocket client)
 ```bash
-docker-compose down
+# open two terminals and connect
+websocat ws://127.0.0.1:8080
+# register
+{"type":"register","username":"alice"}
+
+websocat ws://127.0.0.1:8080
+{"type":"register","username":"bob"}
+
+# send global message from alice
+{"type":"chat_message","text":"Hi everyone"}
 ```
 
-## Communication Protocol
+Integrating with the Flutter app
+- The Flutter client should first connect to `ws://<host>:8080` then send a `register` message with a username.
+- To show online users use messages of type `user_list`.
 
-### Client → Server
-```json
-{
-  "type": "set_bounds",
-  "data": {
-    "width": 400,
-    "height": 800
-  }
-}
-```
+Extending the server
+- Persist messages for offline delivery
+- Add message IDs and delivery/read receipts
+- Add authentication
 
-### Server → Client
-```json
-{
-  "type": "move_event",
-  "x": 125.5,
-  "y": 250.3
-}
-```
-
-## Features
-- Real-time position updates
-- Multiple concurrent clients support
-- Automatic position generation within screen bounds
-- Graceful shutdown handling
+If you want, I can update this README to include example Flutter client code snippets for registering and sending messages.
